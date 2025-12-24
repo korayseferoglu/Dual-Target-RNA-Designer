@@ -27,6 +27,3 @@ This platform is a high-performance, client-side web application built with:
 * **Vanilla JavaScript Engine**: Optimized for rapid string manipulation and thermodynamic calculations without server-side latency.
 * **Client-Side Data Handling**: Utilizes jsPDF and autoTable for secure, offline data reporting.
 * **Responsive Scientific UI**: A professional interface designed for high-resolution data comparison and sequence management.
-
-## Scientific Disclaimer
-This tool was independently engineered to demonstrate the feasibility of multi-targeted RNA therapeutics. The biological algorithms and scoring logic were developed by the author, while AI-augmented coding techniques were utilized to optimize software deployment and frontend performance.
