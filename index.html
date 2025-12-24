@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dual-Target RNA Designer (Homopolymer Rules)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+    :root { 
+        --primary: #2C3E50; --accent: #34495e; --bg: #f4f6f9; --border: #dcdcdc;
+        --success: #27ae60; --danger: #c0392b; --warning: #f39c12;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: var(--bg); color: #333; padding: 30px; }
+    .container { max-width: 1400px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }
+    h2 { color: var(--primary); border-bottom: 3px solid var(--primary); padding-bottom: 10px; margin-top: 0; }
+    
+    .input-section { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 25px; }
+    .target-box { background: #fff; padding: 20px; border: 1px solid var(--border); border-radius: 8px; }
+    .target-box h4 { margin-top: 0; color: var(--primary); margin-bottom: 15px; }
+    label { font-weight: 600; font-size: 0.9em; display: block; margin-bottom: 5px; color: var(--primary); }
+    select, input[type="text"], textarea, input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; margin-bottom: 10px; }
+    textarea { height: 100px; font-family: 'Consolas', monospace; resize: vertical; }
+    
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; background: #eef1f5; padding: 20px; border-radius: 8px; align-items: end; border: 1px solid #e0e0e0; margin-bottom: 20px; }
+    .btn { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+
+    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    #candidatesCount { font-size: 1.2em; font-weight: bold; color: var(--primary); }
+    #compareBtn { background: var(--success); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; display: none; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; }
+    th { background: var(--primary); color: white; padding: 12px; text-align: left; font-size: 13px; white-space: nowrap; }
+    td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; color: #333; }
+    tr:hover { background-color: #f8f9fa; }
+    .check-cell { width: 30px; text-align: center; }
+    .mono { font-family: 'Consolas', monospace; letter-spacing: 0.5px; }
+    .btn-copy-small { background: #ecf0f1; color: var(--primary); border: 1px solid #bdc3c7; padding: 5px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; }
+
+    .modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); }
+    .modal-content-duplex { background: white; margin: 5% auto; width: 700px; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); overflow: hidden; }
+    .modal-content-compare { background: white; margin: 2% auto; width: 95%; max-width: 1500px; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column; max-height: 95vh; }
+    .modal-header { padding: 15px 25px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #fff; }
+    .modal-body { padding: 25px; overflow-y: auto; }
+    .close-btn { color: #aaa; font-size: 24px; font-weight: bold; cursor: pointer; }
+    
+    .terminal-box { background: #1a1a1a; padding: 25px; border-radius: 6px; font-family: 'Consolas', 'Monaco', monospace; font-size: 15px; line-height: 1.8; color: #e0e0e0; margin-bottom: 15px; }
+    .duplex-row { display: flex; }
+    .duplex-label { width: 90px; color: #bbb; user-select: none; }
+    .duplex-seq { flex: 1; white-space: pre; }
+    .color-sense { color: #4facfe; }
+    .color-anti { color: #ff5e62; }
+    .color-end { color: #2ecc71; }
+    .divider { border-top: 1px solid #444; margin: 15px 0; }
+    .guide-label { color: #888; font-size: 13px; margin-bottom: 5px; }
+    .guide-seq { color: #bbb; letter-spacing: 1px; }
+
+    .modal-footer { padding: 15px 25px; background: #f9f9f9; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-action { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; }
+    .bg-green { background: var(--success); } .bg-red { background: var(--danger); } .bg-orange { background: var(--warning); } .bg-grey { background: #7f8c8d; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Dual-Target RNA Designer</h2>
+    
+    <div class="input-section">
+        <div class="target-box">
+            <h4>Target A</h4>
+            <label>Type</label>
+            <select id="type1">
+                <option value="tsg">Tumor Suppressor (TSG)</option>
+                <option value="onco">Oncogene</option>
+                <option value="other">Other</option>
+            </select>
+            <label>Name</label>
+            <input type="text" id="name1" value="Target_A">
+            <label>Sequence (5' &rarr; 3')</label>
+            <textarea id="seq1" placeholder="AGCT..."></textarea>
+        </div>
+        <div class="target-box">
+            <h4>Target B</h4>
+            <label>Type</label>
+            <select id="type2">
+                <option value="tsg">Tumor Suppressor (TSG)</option>
+                <option value="onco" selected>Oncogene</option>
+                <option value="other">Other</option>
+            </select>
+            <label>Name</label>
+            <input type="text" id="name2" value="Target_B">
+            <label>Sequence (5' &rarr; 3')</label>
+            <textarea id="seq2" placeholder="AGCT..."></textarea>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div>
+            <label>Length</label>
+            <select id="oligoLength">
+                <option value="19">19-mer</option>
+                <option value="20" selected>20-mer</option>
+                <option value="21">21-mer</option>
+            </select>
+        </div>
+        <div><label>Min GC %</label><input type="number" id="minGC" value="35"></div>
+        <div><label>Max GC %</label><input type="number" id="maxGC" value="65"></div>
+        <div style="display:flex; align-items:center; height:50px;">
+            <input type="checkbox" id="enforceAT" checked style="width:20px; height:20px; margin-right:10px;">
+            <label for="enforceAT" style="margin:0; cursor:pointer;">Strict A/T Rich 3' End</label>
+        </div>
+        <div><button class="btn" onclick="runDualAnalysis()">FIND CANDIDATES</button></div>
+    </div>
+
+    <div class="results-header" id="resultsHeader" style="display:none;">
+        <div id="candidatesCount">Candidates Found: 0</div>
+        <button id="compareBtn" onclick="openCompareModal()">COMPARE SELECTED (0)</button>
+    </div>
+
+    <div id="resultsArea" style="display:none;">
+        <table id="mainTable">
+            <thead>
+                <tr>
+                    <th class="check-cell"><input type="checkbox" onclick="toggleAll(this)"></th>
+                    <th>Sequence (5'-3')</th>
+                    <th id="th1">Target A Pos</th>
+                    <th id="th2">Target B Pos</th>
+                    <th>GC%</th>
+                    <th>ΔG</th>
+                    <th>Score</th>
+                    <th style="text-align:center;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="duplexModal" class="modal">
+    <div class="modal-content-duplex">
+        <div class="modal-header">
+            <h3>RNA Duplex Structure</h3>
+            <span class="close-btn" onclick="closeModal('duplexModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div class="terminal-box" id="terminalContent"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-action" onclick="copyFullDuplex()">Copy Sequences</button>
+        </div>
+    </div>
+</div>
+
+<div id="compareModal" class="modal">
+    <div class="modal-content-compare">
+        <div class="modal-header">
+            <h3>Comparison Table</h3>
+            <span class="close-btn" onclick="closeModal('compareModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+            <table id="compareTable">
+                <thead><tr id="compareHeaderRow"></tr></thead>
+                <tbody id="compareBody"></tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-action bg-grey" onclick="closeModal('compareModal')">Close</button>
+            <button class="btn-action" onclick="copyComparisonTable()">Copy Table</button>
+            <button class="btn-action bg-green" onclick="downloadExcel()">Download Excel</button>
+            <button class="btn-action bg-orange" onclick="downloadFASTA()">Download FASTA</button>
+            <button class="btn-action bg-red" onclick="downloadPDF()">Download PDF</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let globalResults = [];
+    let currentDuplexData = null;
+    let selectedIndices = new Set();
+    const nnParams = { "AA": -0.9, "TT": -0.9, "AT": -0.9, "TA": -1.1, "CA": -1.8, "TG": -1.8, "GT": -1.7, "AC": -1.7, "CT": -1.7, "AG": -1.7, "GA": -2.3, "TC": -2.3, "CG": -3.4, "GC": -3.4, "GG": -2.1, "CC": -2.1 };
+
+    function calculateDeltaG(seq) {
+        let dG = 3.4; 
+        for (let i = 0; i < seq.length - 1; i++) dG += nnParams[seq.substring(i, i+2)] || -1.0;
+        if (/^[AT]/.test(seq)) dG += 0.5;
+        if (/[AT]$/.test(seq)) dG += 0.5;
+        return dG.toFixed(1);
+    }
+
+    function copyText(text) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try { document.execCommand('copy'); alert("Copied!"); } 
+        catch (err) { prompt("Copy manual:", text); }
+        document.body.removeChild(textArea);
+    }
+
+    function runDualAnalysis() {
+        const rawS1 = document.getElementById('seq1').value;
+        const rawS2 = document.getElementById('seq2').value;
+
+        const s1 = rawS1.replace(/[^a-zA-Z]/g, '').toUpperCase();
+        const s2 = rawS2.replace(/[^a-zA-Z]/g, '').toUpperCase();
+        
+        const len = parseInt(document.getElementById('oligoLength').value);
+        const minGC = parseFloat(document.getElementById('minGC').value);
+        const maxGC = parseFloat(document.getElementById('maxGC').value);
+        const enforceAT = document.getElementById('enforceAT').checked;
+        
+        const n1 = document.getElementById('name1').value;
+        const n2 = document.getElementById('name2').value;
+        document.getElementById('th1').innerText = n1 + " Pos";
+        document.getElementById('th2').innerText = n2 + " Pos";
+
+        if(s1.length < len || s2.length < len) { alert("Sequences too short or empty."); return; }
+
+        let map1 = new Map();
+        for(let i=0; i<=s1.length-len; i++) map1.set(s1.substring(i, i+len), i+1);
+
+        globalResults = [];
+        selectedIndices.clear();
+        updateCompareButton();
+        
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        for(let j=0; j<=s2.length-len; j++) {
+            let sub = s2.substring(j, j+len);
+            if(map1.has(sub)) {
+                let gc = (sub.match(/[GC]/g)||[]).length / len * 100;
+
+                // --- 1. FILTER: GC Content ---
+                if(gc < minGC || gc > maxGC) continue;
+
+                // --- 2. FILTER: Strict A/T ---
+                if(enforceAT && !/^[AT]+$/.test(sub.substring(len-4))) continue;
+
+                // --- 3. FILTER: HOMOPOLYMER (ELIMINATION) ---
+                // GGGG -> Eliminate
+                if(sub.includes("GGGG")) continue;
+                // AAAAA or CCCCC -> Eliminate
+                if(sub.includes("AAAAA") || sub.includes("CCCCC")) continue;
+
+                // --- SCORING ---
+                let dg = calculateDeltaG(sub);
+                
+                // Base Score
+                let score = 100;
+                
+                // GC Penalty
+                if (gc < 35 || gc > 55) score -= 10;
+                
+                // DeltaG Bonus/Penalty
+                if(dg < -25) score += 5; // Good binding
+                else if(dg > -15) score -= 10; // Weak binding
+
+                // --- 4. SCORING: HOMOPOLYMER (PENALTY) ---
+                // TTTT (UUUU in RNA) -> High Penalty (-25)
+                if(sub.includes("TTTT")) score -= 25;
+                
+                // AAAA or CCCC (4x) -> Low Penalty (-5)
+                if(sub.includes("AAAA") || sub.includes("CCCC")) score -= 5;
+                
+                // Cap Score
+                if(score < 0) score = 0;
+                if(score > 100) score = 100;
+
+                let sense = sub.replace(/T/g, 'U');
+                let antisense = sub.split('').map(b => ({'A':'U','T':'A','G':'C','C':'G'}[b])).reverse().join('');
+
+                globalResults.push({
+                    seq: sub, pos1: map1.get(sub), pos2: j+1,
+                    gc: gc.toFixed(1), dg: dg, score: score,
+                    sense: sense, antisense: antisense
+                });
+            }
+        }
+
+        globalResults.sort((a,b) => b.score - a.score);
+        document.getElementById('candidatesCount').innerText = `Candidates Found: ${globalResults.length}`;
+        document.getElementById('resultsHeader').style.display = 'flex';
+
+        if(globalResults.length === 0) {
+            alert("No common candidates found with these filters.");
+            document.getElementById('resultsArea').style.display = 'none';
+            return;
+        }
+
+        globalResults.forEach((r, idx) => {
+            let row = `<tr>
+                <td class="check-cell"><input type="checkbox" onchange="toggleSelect(${idx}, this.checked)"></td>
+                <td class="mono"><strong>${r.seq}</strong></td>
+                <td>${r.pos1}</td>
+                <td>${r.pos2}</td>
+                <td>${r.gc}%</td>
+                <td>${r.dg}</td>
+                <td style="font-weight:bold; color:${r.score>70?'#27ae60':'#2c3e50'}">${r.score}</td>
+                <td style="text-align:center;">
+                    <button class="btn-copy-small" onclick="copyText('${r.seq}')">Copy</button>
+                    <button class="btn-copy-small" style="background:#2C3E50; color:white; border:none;" onclick="openDuplex(${idx})">View</button>
+                </td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+        document.getElementById('resultsArea').style.display = 'block';
+    }
+
+    function toggleSelect(idx, isChecked) {
+        if(isChecked) selectedIndices.add(idx); else selectedIndices.delete(idx);
+        updateCompareButton();
+    }
+    function toggleAll(source) {
+        const checkboxes = document.querySelectorAll('#tableBody input[type="checkbox"]');
+        checkboxes.forEach((cb, idx) => {
+            cb.checked = source.checked;
+            if(source.checked) selectedIndices.add(idx); else selectedIndices.delete(idx);
+        });
+        updateCompareButton();
+    }
+    function updateCompareButton() {
+        const btn = document.getElementById('compareBtn');
+        btn.style.display = selectedIndices.size > 0 ? 'block' : 'none';
+        btn.innerText = `COMPARE SELECTED (${selectedIndices.size})`;
+    }
+
+    function openCompareModal() {
+        const n1 = document.getElementById('name1').value;
+        const n2 = document.getElementById('name2').value;
+        document.getElementById('compareHeaderRow').innerHTML = `
+            <th>Sequence (DNA 5'-3')</th><th>Sense (Passenger 5'-3')</th><th>Antisense (Guide 5'-3')</th>
+            <th>${n1} Pos</th><th>${n2} Pos</th><th>GC%</th><th>ΔG</th><th>Score</th>
+        `;
+        const tbody = document.getElementById('compareBody');
+        tbody.innerHTML = '';
+        selectedIndices.forEach(idx => {
+            let r = globalResults[idx];
+            let row = `<tr>
+                <td class="mono"><strong>${r.seq}</strong></td><td class="mono" style="color:#4facfe;">${r.sense}</td><td class="mono" style="color:#e74c3c;">${r.antisense}</td>
+                <td>${r.pos1}</td><td>${r.pos2}</td><td>${r.gc}%</td><td>${r.dg}</td><td>${r.score}</td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+        document.getElementById('compareModal').style.display = 'block';
+    }
+
+    // EXPORT FUNCTIONS WITH DIRECTION TAGS
+    function copyComparisonTable() {
+        const n1 = document.getElementById('name1').value;
+        const n2 = document.getElementById('name2').value;
+        let text = `Sequence(5'-3')\tSense(Passenger 5'-3')\tAntisense(Guide 5'-3')\t${n1}_Pos\t${n2}_Pos\tGC%\tdG\tScore\n`;
+        selectedIndices.forEach(idx => {
+            let r = globalResults[idx];
+            text += `${r.seq}\t${r.sense}\t${r.antisense}\t${r.pos1}\t${r.pos2}\t${r.gc}\t${r.dg}\t${r.score}\n`;
+        });
+        copyText(text);
+    }
+
+    function downloadExcel() {
+        const n1 = document.getElementById('name1').value;
+        const n2 = document.getElementById('name2').value;
+        let csv = `Sequence(5'-3'),Sense(Passenger 5'-3'),Antisense(Guide 5'-3'),${n1}_Pos,${n2}_Pos,GC,dG,Score\n`;
+        selectedIndices.forEach(idx => {
+            let r = globalResults[idx];
+            csv += `${r.seq},${r.sense},${r.antisense},${r.pos1},${r.pos2},${r.gc},${r.dg},${r.score}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'RNA_Candidates.csv'; a.click();
+    }
+
+    function downloadFASTA() {
+        let fasta = "";
+        const n1 = document.getElementById('name1').value.replace(/\s+/g, '_');
+        const n2 = document.getElementById('name2').value.replace(/\s+/g, '_');
+        selectedIndices.forEach(idx => {
+            let r = globalResults[idx];
+            fasta += `>Candidate_${idx + 1}_${n1}_Pos${r.pos1}_${n2}_Pos${r.pos2} | Sense_Passenger_(5'-3')\n${r.sense}\n`;
+            fasta += `>Candidate_${idx + 1}_${n1}_Pos${r.pos1}_${n2}_Pos${r.pos2} | Antisense_Guide_(5'-3')\n${r.antisense}\n`;
+        });
+        const blob = new Blob([fasta], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'DualTarget_Candidates.fasta'; a.click();
+    }
+
+    async function downloadPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const n1 = document.getElementById('name1').value;
+        const n2 = document.getElementById('name2').value;
+        doc.text("Dual-Target RNA Candidates Report", 14, 15);
+        const tableData = [];
+        selectedIndices.forEach(idx => {
+            let r = globalResults[idx];
+            tableData.push([r.seq, r.sense, r.antisense, r.pos1, r.pos2, r.gc, r.dg, r.score]);
+        });
+        // Corrected quotes for PDF array
+        doc.autoTable({
+            head: [["Sequence (5'-3')", "Sense (5'-3')", "Antisense (5'-3')", `${n1} Pos`, `${n2} Pos`, "GC%", "dG", "Score"]],
+            body: tableData,
+            startY: 20,
+            styles: { fontSize: 8, font: 'courier' },
+            headStyles: { fillColor: [44, 62, 80] }
+        });
+        doc.save('RNA_Report.pdf');
+    }
+
+    function openDuplex(idx) {
+        const r = globalResults[idx];
+        const anti_3_5 = r.antisense.split('').reverse().join(''); 
+        currentDuplexData = `Sense (5'-3'): ${r.sense}\nAntisense (5'-3'): ${r.antisense}`;
+        const html = `
+            <div class="duplex-row"><div class="duplex-label">Sense 5':</div><div class="duplex-seq"><span class="color-sense">${r.sense}</span> <span class="color-end">- 3'</span></div></div>
+            <div class="duplex-row"><div class="duplex-label"></div><div class="duplex-seq" style="color:#444;">${"|".repeat(r.seq.length)}</div></div>
+            <div class="duplex-row"><div class="duplex-label">Anti 3':</div><div class="duplex-seq"><span class="color-anti">${anti_3_5}</span> <span class="color-end">- 5'</span></div></div>
+            <div class="divider"></div>
+            <div class="guide-label">Guide Strand (Antisense 5'->3'):</div><div class="guide-seq">${r.antisense}</div>
+        `;
+        document.getElementById('terminalContent').innerHTML = html;
+        document.getElementById('duplexModal').style.display = 'block';
+    }
+    function copyFullDuplex() { if(currentDuplexData) copyText(currentDuplexData); }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    window.onclick = function(e) { if(e.target.className === 'modal') e.target.style.display = 'none'; }
+</script>
+</body>
+</html>
